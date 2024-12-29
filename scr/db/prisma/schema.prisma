@@ -1,0 +1,179 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+/**
+ * ========== USERS ==========
+ */
+model User {
+    id              Int      @id @default(autoincrement())
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+    firstName       String
+    lastName        String
+    username        String   @unique
+    email           String   @unique
+    password        String
+    role            UserRole @default(USER)
+    moneyNum        Float    @default(0.0)
+    userImageUrl    String?
+    favoriteProduct String?
+
+    // Relations
+    orders    Order[]
+    reviews   Review[]
+    addresses Address[]
+    payments  Payment[]
+}
+
+enum UserRole {
+    USER
+    ADMIN
+}
+
+/**
+ * ========== ADDRESSES ==========
+ */
+model Address {
+    id        Int      @id @default(autoincrement())
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    userId    Int
+    label     String?
+    address1  String
+    address2  String?
+    city      String
+    state     String?
+    zipcode   String
+    country   String
+
+    // Relation
+    user User @relation(fields: [userId], references: [id])
+
+    // If you want to see which orders used this address as shipping:
+    shippingOrders Order[] @relation("shippingAddress")
+
+    // If you want to see which orders used this address as billing:
+    billingOrders Order[] @relation("billingAddress")
+}
+
+/**
+ * ========== PRODUCTS ==========
+ */
+model Product {
+    id          Int      @id @default(autoincrement())
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    name        String
+    category    String
+    price       Float
+    inStock     Boolean  @default(true)
+    quantity    Int      @default(0)
+    imageUrl    String?
+    rating      Float?
+    description String?
+     prompt      String?
+
+    // Relations
+    orderItems OrderItem[]
+    reviews    Review[]
+}
+
+/**
+ * ========== REVIEWS ==========
+ */
+model Review {
+    id         Int      @id @default(autoincrement())
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+    starRating Int
+    comment    String?
+    userId     Int
+    productId  Int
+
+    // Relations
+    user    User    @relation(fields: [userId], references: [id])
+    product Product @relation(fields: [productId], references: [id])
+
+    @@unique([userId, productId])
+}
+
+/**
+ * ========== ORDERS ==========
+ */
+model Order {
+    id                Int         @id @default(autoincrement())
+    createdAt         DateTime    @default(now())
+    updatedAt         DateTime    @updatedAt
+    status            OrderStatus @default(PENDING)
+    total             Float       @default(0)
+    userId            Int
+    shippingAddressId Int?
+    billingAddressId  Int?
+
+    // Relations
+    user            User        @relation(fields: [userId], references: [id])
+    orderItems      OrderItem[]
+    shippingAddress Address?    @relation("shippingAddress", fields: [shippingAddressId], references: [id])
+    billingAddress  Address?    @relation("billingAddress", fields: [billingAddressId], references: [id])
+    payments        Payment[]
+}
+
+enum OrderStatus {
+    PENDING
+    COMPLETED
+    CANCELLED
+    SHIPPED
+    REFUNDED
+}
+
+/**
+ * ========== ORDER ITEMS ==========
+ */
+model OrderItem {
+    id        Int      @id @default(autoincrement())
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    quantity  Int
+    price     Float
+    productId Int
+    orderId   Int
+
+    // Relations
+    product Product @relation(fields: [productId], references: [id])
+    order   Order   @relation(fields: [orderId], references: [id])
+}
+
+/**
+ * ========== PAYMENT ==========
+ */
+model Payment {
+    id                  Int           @id @default(autoincrement())
+    createdAt           DateTime      @default(now())
+    updatedAt           DateTime      @updatedAt
+    orderId             Int
+    stripePaymentIntent String
+    amount              Float
+    status              PaymentStatus @default(REQUIRES_PAYMENT_METHOD)
+
+    // Relation
+    order Order @relation(fields: [orderId], references: [id])
+
+    // Optional user who made this payment
+    userId Int?
+    user   User? @relation(fields: [userId], references: [id])
+}
+
+enum PaymentStatus {
+    REQUIRES_PAYMENT_METHOD
+    REQUIRES_ACTION
+    PROCESSING
+    SUCCEEDED
+    CANCELED
+    FAILED
+}
