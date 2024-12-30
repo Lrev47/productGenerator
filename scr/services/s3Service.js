@@ -13,12 +13,15 @@ const s3 = new AWS.S3();
  */
 async function uploadImageToS3(base64Data, fileNamePrefix = "generated") {
   try {
-    // Convert base64 to buffer
+    console.log("Starting uploadImageToS3");
+
+    console.log("Step 1: Converting base64 to buffer...");
     const imageBuffer = Buffer.from(base64Data, "base64");
 
-    // Unique file name
+    console.log("Step 2: Creating unique file name...");
     const timestamp = Date.now();
     const fileName = `images/${fileNamePrefix}_${timestamp}.png`;
+    console.log(`Generated file name: ${fileName}`);
 
     const params = {
       Bucket: s3BucketName,
@@ -26,13 +29,17 @@ async function uploadImageToS3(base64Data, fileNamePrefix = "generated") {
       Body: imageBuffer,
       ContentType: "image/png",
     };
+    console.log("S3 upload params:", params);
 
-    // Upload the image
-    await s3.putObject(params).promise();
+    console.log("Step 3: Uploading to S3...");
+    const result = await s3.putObject(params).promise();
+    console.log("S3 putObject result:", result);
 
-    // Construct the public URL (assuming your bucket is public or you have a CloudFront distro)
+    console.log("Step 4: Constructing image URL...");
     const imageUrl = `https://${s3BucketName}.s3.amazonaws.com/${fileName}`;
+    console.log(`Image URL: ${imageUrl}`);
 
+    console.log("Finished uploadImageToS3");
     return imageUrl;
   } catch (error) {
     console.error("Error uploading image to S3:", error);
