@@ -4,74 +4,100 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient(); // Initialize Prisma
 
 const {
-  generateMultipleProductData,
+  generateMultipleProductDataWithCallback,
   generateProductDescriptionPrompt,
 } = require("../services/chatgptService");
 const { generateImageFromPrompt } = require("../services/comfyUIService");
 const { uploadImageToS3 } = require("../services/s3Service");
 
 /**
- * STEP 1: Generate multiple products and store them using Prisma
+ * STEP 1: Generate multiple products and store them using Prisma,
+ *        with partial saving if an error occurs.
  */
 async function generateProducts(req, res) {
   console.log("==> [generateProducts] Function called.");
 
   try {
-    const { numberOfProducts } = req.body;
+    let { numberOfProducts } = req.body;
     console.log(
       "   -> numberOfProducts (from request body):",
       numberOfProducts
     );
 
+    // If user didn't provide, default to 500 (your requested default).
     if (!numberOfProducts || typeof numberOfProducts !== "number") {
-      console.warn("   -> Invalid or missing numberOfProducts.");
-      return res.status(400).json({
-        error: "Please provide a valid numberOfProducts (number).",
-      });
+      numberOfProducts = 500;
+      console.warn(
+        "   -> Using default of 500 products because none was provided."
+      );
     }
 
-    // 1. Use ChatGPT to generate an array of product data
-    console.log("   -> Generating multiple product data via ChatGPT...");
-    const productDataArray = await generateMultipleProductData(
-      numberOfProducts
-    );
     console.log(
-      `   -> Received ${productDataArray.length} products from ChatGPT.`
+      "   -> Generating multiple product data via ChatGPT (gpt-4)..."
     );
 
-    // 2. Insert each generated product into the database via Prisma
+    // We'll keep track of all inserted products in case we want to return them,
+    // but partial inserts happen as soon as each chunk arrives.
     const insertedProducts = [];
-    for (const productData of productDataArray) {
-      const { name, category, price, rating, description, prompt, quantity } =
-        productData;
-      console.log("   -> Creating product in DB:", productData);
 
-      // Create the product in the Product table
-      const newProduct = await prisma.product.create({
-        data: {
-          name,
-          category,
-          price,
-          inStock: true, // default
-          quantity: quantity ?? 0,
-          rating: rating ?? 0,
-          description,
-          prompt,
-        },
-      });
-      console.log("   -> Inserted product with ID:", newProduct.id);
+    // A callback that will be triggered each time we get a chunk of N items
+    async function onChunkReceived(chunk) {
+      console.log(
+        `   -> [onChunkReceived] Chunk has ${chunk.length} items. Saving...`
+      );
 
-      insertedProducts.push(newProduct);
+      // Insert each generated product into the database via Prisma
+      for (const productData of chunk) {
+        const { name, category, price, rating, description, prompt, quantity } =
+          productData;
+
+        console.log("   -> Creating product in DB:", productData);
+
+        // Create the product in the Product table
+        const newProduct = await prisma.product.create({
+          data: {
+            name,
+            category,
+            price,
+            inStock: true, // default
+            quantity: quantity ?? 0,
+            rating: rating ?? 0,
+            description,
+            prompt,
+          },
+        });
+        console.log("   -> Inserted product with ID:", newProduct.id);
+
+        insertedProducts.push(newProduct);
+      }
     }
+
+    // 2. Generate data in chunks, passing our callback
+    await generateMultipleProductDataWithCallback(
+      numberOfProducts,
+      20,
+      onChunkReceived
+    );
 
     console.log("==> [generateProducts] Finished successfully.");
+    // At this point, all chunks were retrieved & saved with no major errors
     return res.status(200).json({
       success: true,
       data: insertedProducts,
     });
   } catch (error) {
     console.error("Error generating products:", error);
-    return res.status(500).json({ error: "Internal server error" });
+
+    // If an error occurs, we still have partial data in `insertedProducts`
+    // Return partial success response if desired:
+    return res.status(500).json({
+      error: "Internal server error occurred during product generation.",
+      partialInsertedCount: (error && error.insertedProductsLength) || 0,
+      // Or simply return how many we got in `insertedProducts` array
+      partialData: [],
+      message:
+        "Some products may have been inserted before the error. Check logs for details.",
+    });
   }
 }
 

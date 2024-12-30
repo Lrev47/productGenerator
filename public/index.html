@@ -91,15 +91,20 @@
     <div class="flex-container">
       <!-- LEFT COLUMN: Generate Products -->
       <div class="left-column">
-        <h2>Generate Products</h2>
+        <h2>Generate Products (GPT-4)</h2>
+        <p>
+          Generates products in chunks and saves them to the DB even if an error
+          occurs later. If no number is specified, defaults to 500.
+        </p>
         <form id="generateProductsForm">
-          <label for="numberOfProductsInput">Number of Products:</label>
+          <label for="numberOfProductsInput"
+            >Number of Products (optional):</label
+          >
           <input
             type="number"
             id="numberOfProductsInput"
             name="numberOfProducts"
-            placeholder="e.g. 5"
-            required
+            placeholder="e.g. 500"
           />
           <button type="submit">Generate Products</button>
         </form>
@@ -110,7 +115,7 @@
         <h2>Generate Missing Images</h2>
         <p>
           This will create images for all products that do not currently have an
-          image.
+          image. Uses existing product data from the DB.
         </p>
         <button id="generateMissingBtn">Generate Missing</button>
 
@@ -151,12 +156,13 @@
       // 1) Handle "Generate Products" form submit
       generateProductsForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const numberOfProducts = document.getElementById(
+        const numberOfProductsInput = document.getElementById(
           "numberOfProductsInput"
-        ).value;
+        );
+        const numberOfProducts = numberOfProductsInput.value || 0;
 
         responseArea.textContent =
-          "Generating " + numberOfProducts + " products...";
+          "Generating " + (numberOfProducts || 500) + " products...";
 
         try {
           // Matches route: router.post("/generate-products", generateProducts);
@@ -182,9 +188,7 @@
         responseArea.textContent = "Generating missing images...";
 
         try {
-          // Matches route: router.post("/generate-missing", generateMissingProductImages);
-          // And is mounted as app.use("/api/images", imageRoutes);
-          // So the full path is /api/images/generate-missing
+          // e.g. POST /api/images/generate-missing
           const response = await fetch("/api/images/generate-missing", {
             method: "POST",
           });
@@ -205,9 +209,7 @@
           "Generating image for product ID: " + productId + "...";
 
         try {
-          // Matches route: router.post("/generate-by-id/:id", generateImageById);
-          // And is mounted as app.use("/api/images", imageRoutes);
-          // So the full path is /api/images/generate-by-id/123
+          // e.g. POST /api/images/generate-by-id/:id
           const response = await fetch(
             `/api/images/generate-by-id/${productId}`,
             {

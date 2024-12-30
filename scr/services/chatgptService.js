@@ -2,17 +2,18 @@
 
 const { Configuration, OpenAIApi } = require("openai");
 const { openAiApiKey } = require("../config");
-const { PassThrough } = require("stream");
 const { jsonrepair } = require("jsonrepair");
 
-// 1. Configure OpenAI
+/**
+ * 1. Configure OpenAI
+ */
 const configuration = new Configuration({
   apiKey: openAiApiKey,
 });
 const openai = new OpenAIApi(configuration);
 
 /**
- * Single-product prompt generator (detailed marketing copy).
+ * 2. Single-product prompt generator (detailed marketing copy).
  */
 async function generateProductDescriptionPrompt(productDetails) {
   try {
@@ -20,19 +21,19 @@ async function generateProductDescriptionPrompt(productDetails) {
     console.log("Product details:", productDetails);
 
     const completion = await openai.createChatCompletion({
-      model: "gpt-4o-mini-2024-07-18", // from your docs
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "You are an AI that generates marketing-friendly product descriptions. Provide a short, persuasive product blurb.",
+            "You are an AI that generates marketing-friendly product descriptions. Provide a short, persuasive product blurb. Be careful with JSON syntax if you show examples.",
         },
         {
           role: "user",
           content: `Generate a concise yet compelling product description for: ${productDetails}`,
         },
       ],
-      max_tokens: 1024,
+      max_tokens: 3000,
     });
 
     const result = completion.data.choices[0].message.content.trim();
@@ -47,27 +48,24 @@ async function generateProductDescriptionPrompt(productDetails) {
 }
 
 /**
- * Streams the ChatGPT response and collects all text. Then:
- *  - Removes code fences
- *  - Attempts to parse as JSON
- *  - If that fails, tries 'jsonrepair' to fix small errors
+ * 3. Streams the ChatGPT response, collects full text, strips code fences,
+ *    attempts to fix partial/truncated JSON with 'jsonrepair',
+ *    then parses into an array. Finally, do a deeper "fixObjectKeys" pass
+ *    on each item if needed.
  */
-async function streamAndParseJson(model, messages, maxTokens = 1024) {
-  // Stream the ChatGPT response
-  const completion = await openai.createChatCompletion(
+async function streamAndParseJson(model, messages, maxTokens = 3000) {
+  const response = await openai.createChatCompletion(
     {
       model,
       messages,
       max_tokens: maxTokens,
       stream: true,
     },
-    {
-      responseType: "stream", // So we get a streaming response
-    }
+    { responseType: "stream" }
   );
 
-  let fullResponse = "";
-  const stream = completion.data;
+  let fullText = "";
+  const stream = response.data;
 
   return new Promise((resolve, reject) => {
     stream.on("data", (chunk) => {
@@ -75,20 +73,20 @@ async function streamAndParseJson(model, messages, maxTokens = 1024) {
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed.startsWith("data: ")) continue;
-        const jsonPart = trimmed.replace(/^data: /, "");
-        if (jsonPart === "[DONE]") {
+
+        const jsonPayload = trimmed.replace(/^data: /, "");
+        if (jsonPayload === "[DONE]") {
           return; // End of stream
         }
 
         try {
-          const parsed = JSON.parse(jsonPart);
-          // Each chunk has shape: { choices: [ { delta: { content: "..."} } ] }
+          const parsed = JSON.parse(jsonPayload);
           const content = parsed.choices?.[0]?.delta?.content;
           if (content) {
-            fullResponse += content;
+            fullText += content;
           }
         } catch {
-          // Some lines might not be valid JSON (like "data: [DONE]")
+          // Possibly partial lines or [DONE]
         }
       }
     });
@@ -98,19 +96,15 @@ async function streamAndParseJson(model, messages, maxTokens = 1024) {
     });
 
     stream.on("end", () => {
-      // All chunks received, now attempt to parse
-      let cleaned = fullResponse
-        // Remove code fences
-        .replace(/```[\s\S]*?```/g, "")
-        .replace(/```/g, "")
-        .trim();
+      // 1) Remove code fences
+      let cleaned = removeCodeFences(fullText);
+      // 2) Try to remove partial trailing objects
+      cleaned = tryRemoveTrailingPartialObject(cleaned);
 
-      // 1) Try direct parse
       let parsed;
       try {
         parsed = JSON.parse(cleaned);
       } catch (parseErr1) {
-        // 2) Attempt to repair the JSON using `jsonrepair`
         console.warn(
           "Direct parse of ChatGPT JSON failed. Attempting jsonrepair..."
         );
@@ -128,142 +122,261 @@ async function streamAndParseJson(model, messages, maxTokens = 1024) {
 
       if (!Array.isArray(parsed)) {
         return reject(
+          new Error("ChatGPT output is not an array. Check your prompt logic.")
+        );
+      }
+
+      // Additional pass: fix or remove items with missing keys or glaring issues
+      const finalArray = fixMalformedObjects(parsed);
+
+      if (!finalArray.length) {
+        return reject(
           new Error(
-            "ChatGPT chunk output is not an array. Check your prompt logic."
+            "All objects were malformed and removed. Possibly a severe JSON error."
           )
         );
       }
 
-      resolve(parsed);
+      resolve(finalArray);
     });
   });
 }
 
+/** 3a) Helper: remove triple-backtick code fences */
+function removeCodeFences(text) {
+  return text
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/```/g, "")
+    .trim();
+}
+
+/** 3b) Helper: try removing partial trailing objects at the end */
+function tryRemoveTrailingPartialObject(text) {
+  if (text.trim().endsWith("]")) return text;
+
+  const lastBrace = text.lastIndexOf("}");
+  if (lastBrace > 0) {
+    text = text.slice(0, lastBrace + 1);
+  }
+  if (!text.trim().endsWith("]")) {
+    text += "]";
+  }
+  return text;
+}
+
 /**
- * Low-level function to get "count" products by streaming them from OpenAI.
+ * 3c) fixMalformedObjects:
+ *     - Ensures each object has exactly the 7 keys: name, category, price, rating, quantity, description, prompt
+ *     - If an object is missing keys or has obviously broken data, we discard or try to fix it.
+ */
+function fixMalformedObjects(array) {
+  const REQUIRED_KEYS = [
+    "name",
+    "category",
+    "price",
+    "rating",
+    "quantity",
+    "description",
+    "prompt",
+  ];
+
+  // We'll store only valid items here
+  const validItems = [];
+
+  for (const item of array) {
+    if (typeof item !== "object" || Array.isArray(item) || !item) {
+      console.warn("Discarding non-object item:", item);
+      continue;
+    }
+
+    // Check if it has all required keys
+    let hasAllKeys = true;
+    for (const k of REQUIRED_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(item, k)) {
+        console.warn(
+          `Discarding item missing key "${k}". Item:`,
+          JSON.stringify(item)
+        );
+        hasAllKeys = false;
+        break;
+      }
+    }
+
+    if (!hasAllKeys) continue;
+
+    // Additional sanity checks: e.g., price must be a number
+    if (typeof item.price !== "number") {
+      console.warn("Discarding item with invalid price:", item.price);
+      continue;
+    }
+
+    if (typeof item.rating !== "number") {
+      console.warn("Discarding item with invalid rating:", item.rating);
+      continue;
+    }
+
+    if (typeof item.quantity !== "number") {
+      console.warn("Discarding item with invalid quantity:", item.quantity);
+      continue;
+    }
+
+    // If we reach here, the item is good enough
+    validItems.push(item);
+  }
+
+  return validItems;
+}
+
+/**
+ * 4. Low-level function to fetch 'count' items (chunk) from GPT-4, returning an array.
+ *    We ask for a longer description & prompt, careful about syntax.
  */
 async function getProductChunk(count) {
   console.log("Starting getProductChunk... Count:", count);
 
-  // Stronger prompt to force valid JSON
+  // Tighter prompt to ensure correct structure & syntax
   const systemPrompt = `
-    You are an AI that generates eCommerce product data in JSON format.
-    Each product must have:
-      - name (string)
-      - category (string)
-      - price (float)
-      - rating (float, 0-5)
-      - quantity (integer)
-      - description (string) (LONGER marketing copy)
-      - prompt (string) (A VISUAL prompt describing the product for an AI image generator)
-    Return ONLY valid JSON array, no extra text, no code fences. 
-    If your response is incomplete, provide an easy way to fix it.
-  `;
+You are an AI that ONLY outputs valid JSON arrays of eCommerce product data.
+No extra text, no code blocks, no partial objects, no trailing commas.
+Each product must have exactly these keys: name, category, price, rating, quantity, description, prompt
+- "description": at least 3 sentences
+- "prompt": at least 15 words describing the visual scenario
+
+Double-check your JSON syntax thoroughly. Use proper quotes and colons. 
+If your response is cut off, end with a valid JSON array anyway if possible.
+`;
 
   const userPrompt = `
-    Generate ${count} unique, high-quality products:
-    - name, category, price, rating, quantity
-    - description (2-3 sentences, interesting detail)
-    - prompt (appearance/style for an image generator)
-    Return only a valid JSON array with ${count} objects.
-    No extra text or markdown fences.
-  `;
+Generate ${count} unique, high-quality products in a valid JSON array. Example of 1 item:
 
-  console.log("Sending getProductChunk prompt to OpenAI (streaming)...");
+{
+  "name": "Sample Product",
+  "category": "Sample Category",
+  "price": 12.99,
+  "rating": 4.2,
+  "quantity": 50,
+  "description": "Sentence one. Sentence two. Sentence three. Provide enough detail.",
+  "prompt": "Write at least 15 words describing the product's appearance, setting, or style."
+}
+
+Return only a valid JSON array with ${count} such objects. No code blocks or markdown.
+`;
+
   const chunkArray = await streamAndParseJson(
-    "gpt-4o-mini-2024-07-18",
+    "gpt-4",
     [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    1024
+    3000
   );
 
-  console.log("Parsed chunk array length:", chunkArray.length);
-  console.log("Finished getProductChunk.");
+  console.log("Received chunk array of length:", chunkArray.length);
   return chunkArray;
 }
 
 /**
- * Retries getProductChunk on transient errors like ECONNRESET or ETIMEDOUT.
+ * Retries getProductChunk on transient errors with exponential backoff, up to 5 attempts.
  */
+function isTransientError(error) {
+  const codes = ["ECONNRESET", "ETIMEDOUT", "ENETUNREACH", "ECONNABORTED"];
+  return codes.includes(error.code);
+}
+
 async function getProductChunkWithRetry(
   count,
-  maxRetries = 3,
-  retryDelayMs = 2000
+  maxRetries = 5,
+  baseDelayMs = 5000
 ) {
   let attempts = 0;
   while (attempts < maxRetries) {
     try {
       return await getProductChunk(count);
     } catch (error) {
-      if (
-        error.code === "ECONNRESET" ||
-        error.code === "ETIMEDOUT" ||
-        error.code === "ENETUNREACH" ||
-        error.code === "ECONNABORTED"
-      ) {
+      if (isTransientError(error)) {
         attempts++;
-        console.warn(
-          `Transient error (${error.code}). Retrying attempt ${attempts}/${maxRetries}...`
-        );
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        if (attempts < maxRetries) {
+          const backoff = baseDelayMs * 2 ** (attempts - 1);
+          console.warn(
+            `Transient error (${error.code}). Retrying #${attempts}/${maxRetries} in ${backoff}ms...`
+          );
+          await new Promise((r) => setTimeout(r, backoff));
+        } else {
+          throw new Error(
+            `Failed after ${maxRetries} retries due to repeated network errors.`
+          );
+        }
       } else {
         throw error;
       }
     }
   }
-  throw new Error(
-    `Failed after ${maxRetries} retries due to repeated network errors.`
-  );
 }
 
 /**
- * Generate multiple product data items by chunking in smaller batches.
+ * 5. The new function that yields each chunk to a callback for partial saving, if desired.
+ */
+async function generateMultipleProductDataWithCallback(
+  totalNumberOfProducts,
+  chunkSize,
+  onChunkReceived
+) {
+  console.log("Starting generateMultipleProductDataWithCallback...");
+  console.log(
+    "Total products:",
+    totalNumberOfProducts,
+    "Chunk size:",
+    chunkSize
+  );
+
+  let remaining = totalNumberOfProducts;
+  const requestDelayMs = 8000; // 8 seconds between chunks
+
+  while (remaining > 0) {
+    const batchSize = Math.min(remaining, chunkSize);
+    console.log(
+      `Requesting chunk of size: ${batchSize} (remaining: ${remaining})`
+    );
+
+    // Attempt to get chunk with retry
+    const chunk = await getProductChunkWithRetry(batchSize, 5, 5000);
+    console.log("   -> chunk length after fix:", chunk.length);
+
+    // Call the user-provided callback to handle partial saving
+    await onChunkReceived(chunk);
+
+    remaining -= batchSize;
+
+    if (remaining > 0) {
+      console.log(`   -> Waiting ${requestDelayMs}ms before next chunk...`);
+      await new Promise((resolve) => setTimeout(resolve, requestDelayMs));
+    }
+  }
+
+  console.log("Finished generateMultipleProductDataWithCallback.");
+}
+
+/**
+ * For convenience, if you still want a single function that just returns
+ * the entire array in memory, do:
  */
 async function generateMultipleProductData(
   totalNumberOfProducts,
-  chunkSize = 5
+  chunkSize = 20
 ) {
-  try {
-    console.log("Starting generateMultipleProductData...");
-    console.log("Total number of products:", totalNumberOfProducts);
-    console.log("Chunk size:", chunkSize);
-
-    const finalProducts = [];
-    let remaining = totalNumberOfProducts;
-
-    const requestDelayMs = 2000; // Wait 2 seconds between chunks
-
-    while (remaining > 0) {
-      const batchSize = Math.min(remaining, chunkSize);
-      console.log(
-        `Requesting chunk of size: ${batchSize} (remaining: ${remaining})`
-      );
-
-      // Get chunk with retry logic
-      const chunk = await getProductChunkWithRetry(batchSize);
-      console.log("Received chunk with length:", chunk.length);
-
+  const finalProducts = [];
+  await generateMultipleProductDataWithCallback(
+    totalNumberOfProducts,
+    chunkSize,
+    async (chunk) => {
       finalProducts.push(...chunk);
-      remaining -= batchSize;
-
-      if (remaining > 0) {
-        console.log(`Waiting ${requestDelayMs}ms before next chunk...`);
-        await new Promise((resolve) => setTimeout(resolve, requestDelayMs));
-      }
     }
-
-    console.log("Final products array length:", finalProducts.length);
-    console.log("Finished generateMultipleProductData.");
-    return finalProducts;
-  } catch (error) {
-    console.error("Error in generateMultipleProductData:", error);
-    throw error;
-  }
+  );
+  return finalProducts;
 }
 
 module.exports = {
   generateProductDescriptionPrompt,
   generateMultipleProductData,
+  generateMultipleProductDataWithCallback,
 };
