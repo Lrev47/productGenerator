@@ -1,0 +1,190 @@
+{
+  "input": {
+    "workflow": {
+      "5": {
+        "inputs": {
+          "width": ["76", 0],
+          "height": ["73", 0],
+          "batch_size": 1
+        },
+        "class_type": "EmptyLatentImage",
+        "_meta": {
+          "title": "Empty Latent Image"
+        }
+      },
+      "6": {
+        "inputs": {
+          "text": ["74", 0],
+          "clip": ["11", 0]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": {
+          "title": "CLIP Text Encode (Prompt)"
+        }
+      },
+      "8": {
+        "inputs": {
+          "samples": ["13", 0],
+          "vae": ["10", 0]
+        },
+        "class_type": "VAEDecode",
+        "_meta": {
+          "title": "VAE Decode"
+        }
+      },
+      "9": {
+        "inputs": {
+          "filename_prefix": "cui",
+          "images": ["8", 0]
+        },
+        "class_type": "SaveImage",
+        "_meta": {
+          "title": "Save Image"
+        }
+      },
+      "10": {
+        "inputs": {
+          "vae_name": "FLUX1/ae.safetensors"
+        },
+        "class_type": "VAELoader",
+        "_meta": {
+          "title": "Load VAE"
+        }
+      },
+      "11": {
+        "inputs": {
+          "clip_name1": "t5xxl_fp8_e4m3fn.safetensors",
+          "clip_name2": "clip_l.safetensors",
+          "type": "flux"
+        },
+        "class_type": "DualCLIPLoader",
+        "_meta": {
+          "title": "DualCLIPLoader"
+        }
+      },
+      "13": {
+        "inputs": {
+          "noise": ["25", 0],
+          "guider": ["22", 0],
+          "sampler": ["16", 0],
+          "sigmas": ["17", 0],
+          "latent_image": ["5", 0]
+        },
+        "class_type": "SamplerCustomAdvanced",
+        "_meta": {
+          "title": "SamplerCustomAdvanced"
+        }
+      },
+      "16": {
+        "inputs": {
+          "sampler_name": "euler"
+        },
+        "class_type": "KSamplerSelect",
+        "_meta": {
+          "title": "KSamplerSelect"
+        }
+      },
+      "17": {
+        "inputs": {
+          "scheduler": "simple",
+          "steps": 28,
+          "denoise": 1,
+          "model": ["61", 0]
+        },
+        "class_type": "BasicScheduler",
+        "_meta": {
+          "title": "BasicScheduler"
+        }
+      },
+      "22": {
+        "inputs": {
+          "model": ["61", 0],
+          "conditioning": ["60", 0]
+        },
+        "class_type": "BasicGuider",
+        "_meta": {
+          "title": "BasicGuider"
+        }
+      },
+      "25": {
+        "inputs": {
+          "noise_seed": 503426723554393
+        },
+        "class_type": "RandomNoise",
+        "_meta": {
+          "title": "RandomNoise"
+        }
+      },
+      "60": {
+        "inputs": {
+          "guidance": 3.5,
+          "conditioning": ["6", 0]
+        },
+        "class_type": "FluxGuidance",
+        "_meta": {
+          "title": "FluxGuidance"
+        }
+      },
+      "61": {
+        "inputs": {
+          "max_shift": 1.15,
+          "base_shift": 0.5,
+          "width": ["76", 0],
+          "height": ["73", 0],
+          "model": ["72", 0]
+        },
+        "class_type": "ModelSamplingFlux",
+        "_meta": {
+          "title": "ModelSamplingFlux"
+        }
+      },
+      "72": {
+        "inputs": {
+          "lora_name": "E-commerce_high_quality_Flux lora_v1.0.safetensors",
+          "strength_model": 0.5,
+          "model": ["77", 0]
+        },
+        "class_type": "LoraLoaderModelOnly",
+        "_meta": {
+          "title": "LoraLoaderModelOnly"
+        }
+      },
+      "73": {
+        "inputs": {
+          "int": 1216
+        },
+        "class_type": "Int Literal (Image Saver)",
+        "_meta": {
+          "title": "Height"
+        }
+      },
+      "74": {
+        "inputs": {
+          "string": "Product rendering scene, a red earphone placed on the seasand ground, blue sea, pearl, clouds, science fiction concept style, 3D rendering, octane rendering, gloss, reflection, black and gold, glowing beige, product rendering, award-winning rendering, award-winning digital rendering, Autodesk 3D rendering, high-definition 3D rendering, product rendering, ue5, 1QQQ"
+        },
+        "class_type": "String Literal (Image Saver)",
+        "_meta": {
+          "title": "Rendering Scene Description"
+        }
+      },
+      "76": {
+        "inputs": {
+          "int": 1216
+        },
+        "class_type": "Int Literal (Image Saver)",
+        "_meta": {
+          "title": "Width"
+        }
+      },
+      "77": {
+        "inputs": {
+          "unet_name": "flux1-dev-F16.gguf"
+        },
+        "class_type": "UnetLoaderGGUF",
+        "_meta": {
+          "title": "Unet Loader (GGUF)"
+        }
+      }
+    }
+  }
+}
