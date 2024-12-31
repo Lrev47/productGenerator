@@ -3,8 +3,8 @@
 const prisma = require("../../db/prisma/client");
 const {
   generateImageFromPrompt,
-} = require("../../services/productImageGenService");
-const { uploadImageToS3 } = require("../../services/s3Service");
+} = require("../../services/products/productImageGenService");
+const { uploadImageToS3 } = require("../../services/products/productS3Service");
 const comfyUiWorkflow = require("../../assets/ProductImageWorkflow.json");
 
 // Optional fixed prompt for additional context:

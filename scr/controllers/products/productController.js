@@ -3,7 +3,7 @@
 const prisma = require("../../db/prisma/client");
 const {
   generateMultipleProductDataWithCallback,
-} = require("../../services/productChatGPTService");
+} = require("../../services/products/productChatGPTService");
 
 /**
  * STEP 1: Generate multiple products and store them using Prisma,
