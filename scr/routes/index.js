@@ -1,15 +1,11 @@
+// src/routes/index.js
 const express = require("express");
-const {
-  generateProducts,
-  generateProductImages,
-} = require("../controllers/productController");
-
 const router = express.Router();
+const productRoutes = require("./productRoutes");
+// const userRoutes = require("./userRoutes");
 
-// STEP 1: Generate products
-router.post("/generate-products", generateProducts);
-
-// STEP 2: Generate product images
-router.post("/generate-product-images", generateProductImages);
+// Top-level: only "products" for now
+router.use("/products", productRoutes);
+// router.use("/users", userRoutes);
 
 module.exports = router;
