@@ -1,3 +1,5 @@
+//public/index.html
+
 <!DOCTYPE html>
 <html>
   <head>
@@ -94,7 +96,8 @@
         <h2>Generate Products (GPT-4)</h2>
         <p>
           Generates products in chunks and saves them to the DB even if an error
-          occurs later. If no number is specified, defaults to 500.
+          occurs later. If no number is specified, defaults to 100 (or whatever
+          your backend default is).
         </p>
         <form id="generateProductsForm">
           <label for="numberOfProductsInput"
@@ -104,7 +107,7 @@
             type="number"
             id="numberOfProductsInput"
             name="numberOfProducts"
-            placeholder="e.g. 500"
+            placeholder="e.g. 100"
           />
           <button type="submit">Generate Products</button>
         </form>
@@ -162,11 +165,11 @@
         const numberOfProducts = numberOfProductsInput.value || 0;
 
         responseArea.textContent =
-          "Generating " + (numberOfProducts || 500) + " products...";
+          "Generating " + (numberOfProducts || 100) + " products...";
 
         try {
-          // Matches route: router.post("/generate-products", generateProducts);
-          const response = await fetch("/api/generate-products", {
+          // Matches route: POST /api/products/generate-products
+          const response = await fetch("/api/products/generate-products", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -188,10 +191,13 @@
         responseArea.textContent = "Generating missing images...";
 
         try {
-          // e.g. POST /api/images/generate-missing
-          const response = await fetch("/api/images/generate-missing", {
-            method: "POST",
-          });
+          // Matches route: POST /api/products/images/generate-missing
+          const response = await fetch(
+            "/api/products/images/generate-missing",
+            {
+              method: "POST",
+            }
+          );
 
           const data = await response.json();
           displayResponse(data);
@@ -209,9 +215,9 @@
           "Generating image for product ID: " + productId + "...";
 
         try {
-          // e.g. POST /api/images/generate-by-id/:id
+          // Matches route: POST /api/products/images/generate-by-id/:id
           const response = await fetch(
-            `/api/images/generate-by-id/${productId}`,
+            `/api/products/images/generate-by-id/${productId}`,
             {
               method: "POST",
             }
