@@ -1,7 +1,7 @@
 // src/services/userChatGPTService.js
 
 const { Configuration, OpenAIApi } = require("openai");
-const { openAiApiKey } = require("../config");
+const { openAiApiKey } = require("../../config");
 const { jsonrepair } = require("jsonrepair");
 
 /**
