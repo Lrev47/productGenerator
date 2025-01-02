@@ -13,101 +13,63 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 /**
- * 2. Streams the ChatGPT response, collects full text, strips code fences,
- *    attempts to fix partial/truncated JSON with 'jsonrepair',
- *    then parses into an array. Finally, do a deeper "fixMalformedObjects" pass
- *    on each item if needed.
+ * 2. getJsonFromChatGPT:
+ *    Performs a single non-streaming chat completion request,
+ *    returning an array after parsing & fix-ups.
  */
-async function streamAndParseJson(model, messages, maxTokens = 3000) {
-  const response = await openai.createChatCompletion(
-    {
-      model,
-      messages,
-      max_tokens: maxTokens,
-      stream: true,
-    },
-    { responseType: "stream" }
-  );
-
-  let fullText = "";
-  const stream = response.data;
-
-  return new Promise((resolve, reject) => {
-    stream.on("data", (chunk) => {
-      const lines = chunk.toString().split("\n");
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) continue;
-
-        const jsonPayload = trimmed.replace(/^data: /, "");
-        if (jsonPayload === "[DONE]") {
-          return; // End of stream
-        }
-
-        try {
-          const parsed = JSON.parse(jsonPayload);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            fullText += content;
-          }
-        } catch {
-          // Possibly partial lines or [DONE]
-        }
-      }
-    });
-
-    stream.on("error", (err) => {
-      reject(err);
-    });
-
-    stream.on("end", () => {
-      // 1) Remove code fences
-      let cleaned = removeCodeFences(fullText);
-      // 2) Try to remove partial trailing objects
-      cleaned = tryRemoveTrailingPartialObject(cleaned);
-
-      let parsed;
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch (parseErr1) {
-        console.warn(
-          "Direct parse of ChatGPT JSON failed. Attempting jsonrepair..."
-        );
-        try {
-          const repaired = jsonrepair(cleaned);
-          parsed = JSON.parse(repaired);
-        } catch (parseErr2) {
-          return reject(
-            new Error(
-              `Failed to parse JSON from ChatGPT: ${parseErr2}\nRaw: ${cleaned}`
-            )
-          );
-        }
-      }
-
-      if (!Array.isArray(parsed)) {
-        return reject(
-          new Error("ChatGPT output is not an array. Check your prompt logic.")
-        );
-      }
-
-      // Additional pass: remove or fix malformed objects
-      const finalArray = fixMalformedObjects(parsed);
-
-      if (!finalArray.length) {
-        return reject(
-          new Error(
-            "All objects were malformed and removed. Possibly a severe JSON error."
-          )
-        );
-      }
-
-      resolve(finalArray);
-    });
+async function getJsonFromChatGPT(model, messages, maxTokens = 10000) {
+  // 1) Make a normal (non-stream) request
+  const response = await openai.createChatCompletion({
+    model,
+    messages,
+    max_tokens: maxTokens,
+    // NOTE: no 'stream: true' here
   });
+
+  // 2) The entire JSON output should be in content
+  let content = response.data.choices?.[0]?.message?.content || "";
+
+  // 3) Remove code fences
+  content = removeCodeFences(content);
+
+  // 4) Try removing partial trailing objects
+  content = tryRemoveTrailingPartialObject(content);
+
+  // 5) Attempt to parse JSON, fallback to jsonrepair
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (parseErr1) {
+    console.warn(
+      "Direct parse of ChatGPT JSON failed. Attempting jsonrepair..."
+    );
+    try {
+      const repaired = jsonrepair(content);
+      parsed = JSON.parse(repaired);
+    } catch (parseErr2) {
+      throw new Error(
+        `Failed to parse JSON from ChatGPT: ${parseErr2}\nRaw: ${content}`
+      );
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("ChatGPT output is not an array. Check your prompt logic.");
+  }
+
+  // 6) Additional pass: remove or fix malformed objects
+  const finalArray = fixMalformedObjects(parsed);
+
+  if (!finalArray.length) {
+    throw new Error(
+      "All objects were malformed and removed. Possibly a severe JSON error."
+    );
+  }
+
+  return finalArray;
 }
 
-/** 2a) Helper: remove triple-backtick code fences */
+/** Helper: remove triple-backtick code fences */
 function removeCodeFences(text) {
   return text
     .replace(/```[\s\S]*?```/g, "")
@@ -115,7 +77,7 @@ function removeCodeFences(text) {
     .trim();
 }
 
-/** 2b) Helper: try removing partial trailing objects at the end */
+/** Helper: try removing partial trailing objects at the end */
 function tryRemoveTrailingPartialObject(text) {
   if (text.trim().endsWith("]")) return text;
 
@@ -130,10 +92,10 @@ function tryRemoveTrailingPartialObject(text) {
 }
 
 /**
- * 2c) fixMalformedObjects:
- *     - Ensures each object has the keys matching your User model:
- *       firstName, lastName, username, email, password, role, moneyNum, favoriteProduct, prompt
- *     - If an object is missing keys or has obviously broken data, we discard or try to fix it.
+ * fixMalformedObjects:
+ * - Ensures each object has these keys:
+ *   firstName, lastName, username, email, password, role, moneyNum, favoriteProduct, prompt
+ * - If missing or invalid, discard.
  */
 function fixMalformedObjects(array) {
   const REQUIRED_KEYS = [
@@ -156,7 +118,6 @@ function fixMalformedObjects(array) {
       continue;
     }
 
-    // Check if it has all required keys
     let hasAllKeys = true;
     for (const key of REQUIRED_KEYS) {
       if (!Object.prototype.hasOwnProperty.call(item, key)) {
@@ -167,29 +128,29 @@ function fixMalformedObjects(array) {
     }
     if (!hasAllKeys) continue;
 
-    // Additional sanity checks
-    if (typeof item.firstName !== "string" || !item.firstName.trim()) {
+    // Additional checks
+    if (!isNonEmptyString(item.firstName)) {
       console.warn("Discarding user with invalid firstName:", item.firstName);
       continue;
     }
-    if (typeof item.lastName !== "string" || !item.lastName.trim()) {
+    if (!isNonEmptyString(item.lastName)) {
       console.warn("Discarding user with invalid lastName:", item.lastName);
       continue;
     }
-    if (typeof item.username !== "string" || !item.username.trim()) {
+    if (!isNonEmptyString(item.username)) {
       console.warn("Discarding user with invalid username:", item.username);
       continue;
     }
-    if (typeof item.email !== "string" || !item.email.includes("@")) {
+    if (!isNonEmptyString(item.email) || !item.email.includes("@")) {
       console.warn("Discarding user with invalid email:", item.email);
       continue;
     }
-    if (typeof item.password !== "string" || item.password.length < 4) {
+    if (!isNonEmptyString(item.password) || item.password.length < 4) {
       console.warn("Discarding user with invalid password:", item.password);
       continue;
     }
 
-    // For role, ensure it's either 'USER' or 'ADMIN' (as per your enum)
+    // role must be 'USER' or 'ADMIN'
     const validRoles = ["USER", "ADMIN"];
     if (!validRoles.includes(item.role)) {
       console.warn(`Item role must be one of ${validRoles}. Found:`, item.role);
@@ -202,10 +163,10 @@ function fixMalformedObjects(array) {
       continue;
     }
 
-    // favoriteProduct can be a string or empty
+    // favoriteProduct
     if (typeof item.favoriteProduct !== "string") {
       console.warn(
-        "favoriteProduct is not a string, converting to an empty string."
+        "favoriteProduct is not a string, converting to empty string."
       );
       item.favoriteProduct = "";
     }
@@ -216,32 +177,38 @@ function fixMalformedObjects(array) {
       item.prompt = "";
     }
 
-    // If we reach here, the user item is good enough
     validItems.push(item);
   }
 
   return validItems;
 }
 
+function isNonEmptyString(str) {
+  return typeof str === "string" && str.trim().length > 0;
+}
+
 /**
- * 3. Get a chunk of user data from ChatGPT. We request a valid JSON array
- *    of user objects with strictly the required fields.
+ * 3. getUserChunk:
+ *    Requests a valid JSON array of user objects from ChatGPT, for `count` users.
  */
 async function getUserChunk(count) {
   console.log("Starting getUserChunk... Count:", count);
 
   const systemPrompt = `
-You are an AI that ONLY outputs valid JSON arrays of user data for a fictional eCommerce platform.
+You are an AI that ONLY outputs valid JSON arrays of user data.
 No extra text, no code blocks, no partial objects, no trailing commas.
-Each user object must have exactly these keys:
+Each user must have exactly these keys:
   "firstName", "lastName", "username", "email", "password", "role", "moneyNum", "favoriteProduct", "prompt"
 
-Constraints:
- - role must be either "USER" or "ADMIN" (randomly choose).
- - moneyNum can be a floating number (like 123.45 or 0.0).
- - prompt should be at least 10 words describing the user’s personal facial details and style.
-Double-check your JSON syntax thoroughly. Use proper quotes and colons.
-If your response is cut off, end with a valid JSON array anyway if possible.
+Rules:
+1. Every user must have valid strings. For lastName and email, do not leave them empty or create blank keys like "".
+2. If you cannot generate a specific field, fill it with a placeholder string like "Unknown".
+3. Do not produce partial objects. If an item is incomplete, skip it or correct it, but the final output must remain a valid JSON array.
+4. "prompt" must be at least 15 words describing the user’s personal facial details and style.
+5. Double-check your JSON syntax thoroughly. Use proper quotes and colons.
+6. End with a valid JSON array. Do not produce any trailing commas or extra text.
+7. **All usernames must be UNIQUE**. If you generate any duplicates, replace or alter them so each user has a unique username.
+8. **All emails must be UNIQUE**. If you generate any duplicates, modify them with random suffixes.
 `;
 
   const userPrompt = `
@@ -262,14 +229,14 @@ Generate ${count} unique fictional users in a valid JSON array. Example of 1 ite
 No code blocks or markdown. Return only a valid JSON array with ${count} such objects.
 `;
 
-  // Using "gpt-4o-mini" per your request
-  const chunkArray = await streamAndParseJson(
-    "gpt-4o-mini",
+  // Instead of streaming, we do a single-step getJsonFromChatGPT
+  const chunkArray = await getJsonFromChatGPT(
+    "gpt-4o-mini-2024-07-18",
     [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    3000
+    10000
   );
 
   console.log("Received user chunk array of length:", chunkArray.length);
@@ -277,7 +244,7 @@ No code blocks or markdown. Return only a valid JSON array with ${count} such ob
 }
 
 /**
- * Retries getUserChunk on transient errors with exponential backoff, up to 5 attempts.
+ * 4. We'll keep the same chunk-based approach with getUserChunkWithRetry, etc.
  */
 function isTransientError(error) {
   const codes = ["ECONNRESET", "ETIMEDOUT", "ENETUNREACH", "ECONNABORTED"];
@@ -315,8 +282,8 @@ async function getUserChunkWithRetry(
 }
 
 /**
- * 4. The function that yields each chunk to a callback for partial saving.
- *    Default chunkSize is set to 10 if not specified.
+ * 5. The main function to generate multiple user data in chunks,
+ *    calling onChunkReceived for partial insertion.
  */
 async function generateMultipleUserDataWithCallback(
   totalNumberOfUsers,
@@ -327,7 +294,7 @@ async function generateMultipleUserDataWithCallback(
   console.log("Total users:", totalNumberOfUsers, "Chunk size:", chunkSize);
 
   let remaining = totalNumberOfUsers;
-  const requestDelayMs = 8000; // 8 seconds between chunks
+  const requestDelayMs = 8000; // 8 seconds between each chunk
 
   while (remaining > 0) {
     const batchSize = Math.min(remaining, chunkSize);
@@ -335,11 +302,11 @@ async function generateMultipleUserDataWithCallback(
       `Requesting user chunk of size: ${batchSize} (remaining: ${remaining})`
     );
 
-    // Attempt to get chunk with retry
+    // Attempt the chunk with retries on transient network errors
     const chunk = await getUserChunkWithRetry(batchSize, 5, 5000);
     console.log("   -> chunk length after fix:", chunk.length);
 
-    // Call the callback to handle partial saving
+    // Let the callback handle partial saving
     await onChunkReceived(chunk);
 
     remaining -= batchSize;
@@ -356,11 +323,10 @@ async function generateMultipleUserDataWithCallback(
 }
 
 /**
- * For convenience, if you want a single function that just returns
- * the entire user array in memory (not chunked), do:
+ * 6. A convenience function to get all user data at once (not chunked).
  */
 async function generateMultipleUserData(
-  totalNumberOfUsers = 100,
+  totalNumberOfUsers = 50,
   chunkSize = 10
 ) {
   const finalUsers = [];

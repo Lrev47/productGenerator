@@ -1,12 +1,15 @@
 // scr/controllers/userImageController.js
 
 const prisma = require("../../db/prisma/client");
-const { generateImageFromPrompt } = require("../services/comfyUIService");
-const { uploadImageToS3 } = require("../../services/products/productS3Service");
+const {
+  generateImageFromPrompt,
+} = require("../../services/users/userImageGenService");
+const { uploadUserImageToS3 } = require("../../services/users/userS3Service");
 const userImageWorkflow = require("../../assets/userImageWorkflow.json");
 
 // Fixed portion appended to user prompt
-const FIXED_USER_PROMPT = " portrait style, 1QQQ";
+const FIXED_USER_PROMPT =
+  "A friendly individual posing for a casual profile picture, looking directly at the camera";
 
 /**
  * Generate an image for a single User by ID (stores in `userImageUrl`).
@@ -43,7 +46,7 @@ async function generateUserImageById(req, res) {
     );
 
     // Upload
-    const s3Url = await uploadImageToS3(base64Image, `user_${id}`);
+    const s3Url = await uploadUserImageToS3(base64Image, `user_${id}`);
 
     // Update User record
     const updatedUser = await prisma.user.update({
@@ -77,7 +80,7 @@ async function generateMissingUserImages(req, res) {
         combinedPrompt,
         userImageWorkflow
       );
-      const s3Url = await uploadImageToS3(base64Image, `user_${user.id}`);
+      const s3Url = await uploadUserImageToS3(base64Image, `user_${user.id}`);
 
       const updatedUser = await prisma.user.update({
         where: { id: user.id },

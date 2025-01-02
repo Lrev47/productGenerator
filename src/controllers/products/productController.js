@@ -70,7 +70,7 @@ async function generateProducts(req, res) {
     // Generate data in chunks, passing our callback
     await generateMultipleProductDataWithCallback(
       numberOfProducts,
-      20,
+      10,
       onChunkReceived
     );
 

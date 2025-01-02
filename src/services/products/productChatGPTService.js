@@ -1,4 +1,4 @@
-// scr/services/productChatGPTService.js
+// src/services/productChatGPTService.js
 
 const { Configuration, OpenAIApi } = require("openai");
 const { openAiApiKey } = require("../../config");
@@ -14,6 +14,7 @@ const openai = new OpenAIApi(configuration);
 
 /**
  * 2. Single-product prompt generator (detailed marketing copy).
+ *    (No changes needed here.)
  */
 async function generateProductDescriptionPrompt(productDetails) {
   try {
@@ -21,7 +22,7 @@ async function generateProductDescriptionPrompt(productDetails) {
     console.log("Product details:", productDetails);
 
     const completion = await openai.createChatCompletion({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini-2024-07-18",
       messages: [
         {
           role: "system",
@@ -33,7 +34,7 @@ async function generateProductDescriptionPrompt(productDetails) {
           content: `Generate a concise yet compelling product description for: ${productDetails}`,
         },
       ],
-      max_tokens: 3000,
+      max_tokens: 10000,
     });
 
     const result = completion.data.choices[0].message.content.trim();
@@ -48,101 +49,62 @@ async function generateProductDescriptionPrompt(productDetails) {
 }
 
 /**
- * 3. Streams the ChatGPT response, collects full text, strips code fences,
- *    attempts to fix partial/truncated JSON with 'jsonrepair',
- *    then parses into an array. Finally, do a deeper "fixObjectKeys" pass
- *    on each item if needed.
+ * 3. Non-streaming approach to fetch the JSON from ChatGPT,
+ *    then parse & fix it.
  */
-async function streamAndParseJson(model, messages, maxTokens = 3000) {
-  const response = await openai.createChatCompletion(
-    {
-      model,
-      messages,
-      max_tokens: maxTokens,
-      stream: true,
-    },
-    { responseType: "stream" }
-  );
-
-  let fullText = "";
-  const stream = response.data;
-
-  return new Promise((resolve, reject) => {
-    stream.on("data", (chunk) => {
-      const lines = chunk.toString().split("\n");
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) continue;
-
-        const jsonPayload = trimmed.replace(/^data: /, "");
-        if (jsonPayload === "[DONE]") {
-          return; // End of stream
-        }
-
-        try {
-          const parsed = JSON.parse(jsonPayload);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            fullText += content;
-          }
-        } catch {
-          // Possibly partial lines or [DONE]
-        }
-      }
-    });
-
-    stream.on("error", (err) => {
-      reject(err);
-    });
-
-    stream.on("end", () => {
-      // 1) Remove code fences
-      let cleaned = removeCodeFences(fullText);
-      // 2) Try to remove partial trailing objects
-      cleaned = tryRemoveTrailingPartialObject(cleaned);
-
-      let parsed;
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch (parseErr1) {
-        console.warn(
-          "Direct parse of ChatGPT JSON failed. Attempting jsonrepair..."
-        );
-        try {
-          const repaired = jsonrepair(cleaned);
-          parsed = JSON.parse(repaired);
-        } catch (parseErr2) {
-          return reject(
-            new Error(
-              `Failed to parse JSON from ChatGPT: ${parseErr2}\nRaw: ${cleaned}`
-            )
-          );
-        }
-      }
-
-      if (!Array.isArray(parsed)) {
-        return reject(
-          new Error("ChatGPT output is not an array. Check your prompt logic.")
-        );
-      }
-
-      // Additional pass: fix or remove items with missing keys or glaring issues
-      const finalArray = fixMalformedObjects(parsed);
-
-      if (!finalArray.length) {
-        return reject(
-          new Error(
-            "All objects were malformed and removed. Possibly a severe JSON error."
-          )
-        );
-      }
-
-      resolve(finalArray);
-    });
+async function getJsonFromChatGPT(model, messages, maxTokens = 10000) {
+  // 1) Make a normal (non-stream) chat completion request
+  const response = await openai.createChatCompletion({
+    model,
+    messages,
+    max_tokens: maxTokens,
+    // no stream: true here
   });
+
+  // 2) The entire JSON is expected in content
+  let content = response.data.choices?.[0]?.message?.content || "";
+
+  // 3) Remove code fences
+  content = removeCodeFences(content);
+
+  // 4) Try removing partial trailing objects
+  content = tryRemoveTrailingPartialObject(content);
+
+  // 5) Attempt to parse JSON, fallback to jsonrepair
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (parseErr1) {
+    console.warn(
+      "Direct parse of ChatGPT JSON failed. Attempting jsonrepair..."
+    );
+    try {
+      const repaired = jsonrepair(content);
+      parsed = JSON.parse(repaired);
+    } catch (parseErr2) {
+      throw new Error(
+        `Failed to parse JSON from ChatGPT: ${parseErr2}\nRaw: ${content}`
+      );
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("ChatGPT output is not an array. Check your prompt logic.");
+  }
+
+  // Additional pass: fix or remove items with missing keys or glaring issues
+  const finalArray = fixMalformedObjects(parsed);
+
+  if (!finalArray.length) {
+    throw new Error(
+      "All objects were malformed and removed. Possibly a severe JSON error."
+    );
+  }
+
+  return finalArray;
 }
 
-/** 3a) Helper: remove triple-backtick code fences */
+/** Helper to remove triple-backtick code fences */
 function removeCodeFences(text) {
   return text
     .replace(/```[\s\S]*?```/g, "")
@@ -150,7 +112,7 @@ function removeCodeFences(text) {
     .trim();
 }
 
-/** 3b) Helper: try removing partial trailing objects at the end */
+/** Helper to remove partial trailing objects if needed */
 function tryRemoveTrailingPartialObject(text) {
   if (text.trim().endsWith("]")) return text;
 
@@ -166,8 +128,8 @@ function tryRemoveTrailingPartialObject(text) {
 
 /**
  * 3c) fixMalformedObjects:
- *     - Ensures each object has exactly the 7 keys: name, category, price, rating, quantity, description, prompt
- *     - If an object is missing keys or has obviously broken data, we discard or try to fix it.
+ *     - Ensures each product object has: name, category, price, rating, quantity, description, prompt
+ *     - If missing or invalid, we discard it.
  */
 function fixMalformedObjects(array) {
   const REQUIRED_KEYS = [
@@ -180,7 +142,6 @@ function fixMalformedObjects(array) {
     "prompt",
   ];
 
-  // We'll store only valid items here
   const validItems = [];
 
   for (const item of array) {
@@ -189,38 +150,31 @@ function fixMalformedObjects(array) {
       continue;
     }
 
-    // Check if it has all required keys
     let hasAllKeys = true;
     for (const k of REQUIRED_KEYS) {
       if (!Object.prototype.hasOwnProperty.call(item, k)) {
-        console.warn(
-          `Discarding item missing key "${k}". Item:`,
-          JSON.stringify(item)
-        );
+        console.warn(`Discarding item missing key "${k}". Item:`, item);
         hasAllKeys = false;
         break;
       }
     }
-
     if (!hasAllKeys) continue;
 
-    // Additional sanity checks: e.g., price must be a number
+    // Additional sanity checks
     if (typeof item.price !== "number") {
       console.warn("Discarding item with invalid price:", item.price);
       continue;
     }
-
     if (typeof item.rating !== "number") {
       console.warn("Discarding item with invalid rating:", item.rating);
       continue;
     }
-
     if (typeof item.quantity !== "number") {
       console.warn("Discarding item with invalid quantity:", item.quantity);
       continue;
     }
 
-    // If we reach here, the item is good enough
+    // If we reach here, the item is valid enough
     validItems.push(item);
   }
 
@@ -228,8 +182,7 @@ function fixMalformedObjects(array) {
 }
 
 /**
- * 4. Low-level function to fetch 'count' items (chunk) from GPT-4, returning an array.
- *    We ask for a longer description & prompt, careful about syntax.
+ * 4. getProductChunk: fetch 'count' items from GPT, returning an array.
  */
 async function getProductChunk(count) {
   console.log("Starting getProductChunk... Count:", count);
@@ -239,10 +192,11 @@ async function getProductChunk(count) {
 You are an AI that ONLY outputs valid JSON arrays of eCommerce product data.
 No extra text, no code blocks, no partial objects, no trailing commas.
 Each product must have exactly these keys: name, category, price, rating, quantity, description, prompt
+
 - "description": at least 3 sentences
 - "prompt": at least 15 words describing the visual scenario
 
-Double-check your JSON syntax thoroughly. Use proper quotes and colons. 
+Double-check your JSON syntax thoroughly. Use proper quotes and colons.
 If your response is cut off, end with a valid JSON array anyway if possible.
 `;
 
@@ -262,13 +216,14 @@ Generate ${count} unique, high-quality products in a valid JSON array. Example o
 Return only a valid JSON array with ${count} such objects. No code blocks or markdown.
 `;
 
-  const chunkArray = await streamAndParseJson(
-    "gpt-4",
+  // Use the new getJsonFromChatGPT method
+  const chunkArray = await getJsonFromChatGPT(
+    "gpt-4o-mini",
     [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    3000
+    10000
   );
 
   console.log("Received chunk array of length:", chunkArray.length);
@@ -314,7 +269,7 @@ async function getProductChunkWithRetry(
 }
 
 /**
- * 5. The new function that yields each chunk to a callback for partial saving, if desired.
+ * 5. The function that yields each chunk to a callback for partial saving.
  */
 async function generateMultipleProductDataWithCallback(
   totalNumberOfProducts,
@@ -342,7 +297,7 @@ async function generateMultipleProductDataWithCallback(
     const chunk = await getProductChunkWithRetry(batchSize, 5, 5000);
     console.log("   -> chunk length after fix:", chunk.length);
 
-    // Call the user-provided callback to handle partial saving
+    // Call the user-provided callback
     await onChunkReceived(chunk);
 
     remaining -= batchSize;
@@ -357,12 +312,12 @@ async function generateMultipleProductDataWithCallback(
 }
 
 /**
- * For convenience, if you still want a single function that just returns
- * the entire array in memory, do:
+ * 6. For convenience, a single function that just returns
+ *    the entire array in memory.
  */
 async function generateMultipleProductData(
   totalNumberOfProducts,
-  chunkSize = 20
+  chunkSize = 10
 ) {
   const finalProducts = [];
   await generateMultipleProductDataWithCallback(
