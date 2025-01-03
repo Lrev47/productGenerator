@@ -1,6 +1,6 @@
 // src/controllers/orders/orderController.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 const {
   createOrdersForAllUsers,
 } = require("../../services/orders/orderService");

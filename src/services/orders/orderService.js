@@ -1,6 +1,6 @@
 // src/services/orders/orderService.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 
 // Possible statuses from your schema
 const ORDER_STATUSES = [

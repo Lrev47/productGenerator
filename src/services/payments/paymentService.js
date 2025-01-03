@@ -1,6 +1,6 @@
 // src/services/payments/paymentService.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 
 /**
  * Generate a Payment for each Order that has no Payment yet.

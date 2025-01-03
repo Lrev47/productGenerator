@@ -1,6 +1,6 @@
 // src/controllers/payments/paymentController.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 const {
   generateMissingPayments,
 } = require("../../services/payments/paymentService");

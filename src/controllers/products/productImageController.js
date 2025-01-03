@@ -1,6 +1,6 @@
 // src/controllers/productImageController.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 const {
   generateImageFromPrompt,
 } = require("../../services/products/productImageGenService");

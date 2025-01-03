@@ -1,6 +1,6 @@
 // src/controllers/orderItems/orderItemController.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 const {
   generateOrderItemsForOrder,
 } = require("../../services/orderItems/orderItemService");

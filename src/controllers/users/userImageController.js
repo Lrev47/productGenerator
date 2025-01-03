@@ -1,6 +1,6 @@
 // src/controllers/users/userImageController.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 const { uploadUserImageToS3 } = require("../../services/users/userS3Service");
 // We no longer need `generateImageFromPrompt`, since we won't poll for base64
 // Instead, we manually build ephemeral JSON + do a single POST /run

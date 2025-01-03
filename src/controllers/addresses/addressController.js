@@ -1,6 +1,6 @@
 // src/controllers/addresses/addressController.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 const {
   generateMultipleAddressDataWithCallback,
 } = require("../../services/addresses/addressChatGPTService");

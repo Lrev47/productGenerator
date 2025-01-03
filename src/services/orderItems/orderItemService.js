@@ -1,6 +1,6 @@
 // src/services/orderItems/orderItemService.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 
 /**
  * Generate a random number of items (3..36) for the given order.

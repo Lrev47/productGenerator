@@ -1,6 +1,6 @@
 // src/controllers/users/userController.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 const {
   generateMultipleUserDataWithCallback,
 } = require("../../services/users/userChatGPTService");

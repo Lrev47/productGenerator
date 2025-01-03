@@ -1,6 +1,6 @@
 // src/controllers/reviews/reviewController.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 const {
   getReviewsForSingleUser,
 } = require("../../services/reviews/reviewChatGPTService");

@@ -1,6 +1,6 @@
 // src/controllers/productController.js
 
-const prisma = require("../../db/prisma/client");
+const prisma = require("../../../prisma/client");
 const {
   generateMultipleProductDataWithCallback,
 } = require("../../services/products/productChatGPTService");
