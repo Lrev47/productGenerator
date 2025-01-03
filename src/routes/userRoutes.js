@@ -8,6 +8,7 @@ const { generateUsers } = require("../controllers/users/userController");
 const {
   generateUserImageById,
   generateMissingUserImages,
+  handleRunpodCallback,
 } = require("../controllers/users/userImageController");
 
 /**
@@ -27,5 +28,8 @@ router.post("/images/generate-by-id/:id", generateUserImageById);
  *    POST /users/images/generate-missing
  */
 router.post("/images/generate-missing", generateMissingUserImages);
+
+// NEW: Endpoint for handling ephemeral callback
+router.post("/images/runpod-callback", handleRunpodCallback);
 
 module.exports = router;
