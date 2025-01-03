@@ -24,6 +24,7 @@ model User {
     userImageUrl    String?
     favoriteProduct String?
     prompt          String?
+    gender          String?
 
     // Relations
     orders    Order[]

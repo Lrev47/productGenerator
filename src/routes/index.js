@@ -8,6 +8,8 @@ const reviewRoutes = require("./reviewRoutes");
 const orderRoutes = require("./orderRoutes");
 const orderItemRoutes = require("./orderItemRoutes");
 const paymentRoutes = require("./paymentRoutes");
+const setupAllRoutes = require("./setupAllRoutes");
+const genderRoutes = require("./genderRoutes");
 
 // Top-level: only "products" for now
 router.use("/products", productRoutes);
@@ -17,5 +19,7 @@ router.use("/reviews", reviewRoutes);
 router.use("/orders", orderRoutes);
 router.use("/order-items", orderItemRoutes);
 router.use("/payments", paymentRoutes);
+router.use("/setup", setupAllRoutes);
+router.use("/gender", genderRoutes);
 
 module.exports = router;

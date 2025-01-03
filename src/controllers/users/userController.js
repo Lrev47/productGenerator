@@ -32,6 +32,7 @@ async function generateUsers(req, res) {
           moneyNum,
           favoriteProduct,
           prompt,
+          gender,
         } = userData;
 
         let attempts = 0;
@@ -53,6 +54,7 @@ async function generateUsers(req, res) {
                 moneyNum: moneyNum ?? 0.0,
                 favoriteProduct,
                 prompt,
+                gender,
               },
             });
 

@@ -108,7 +108,7 @@
       },
       "25": {
         "inputs": {
-          "noise_seed": 503426723554393
+          "noise_seed": 459751279610465
         },
         "class_type": "RandomNoise",
         "_meta": {
@@ -131,22 +131,11 @@
           "base_shift": 0.5,
           "width": ["76", 0],
           "height": ["73", 0],
-          "model": ["72", 0]
+          "model": ["77", 0]
         },
         "class_type": "ModelSamplingFlux",
         "_meta": {
           "title": "ModelSamplingFlux"
-        }
-      },
-      "72": {
-        "inputs": {
-          "lora_name": "LinkedInf1.safetensors",
-          "strength_model": 0.5,
-          "model": ["77", 0]
-        },
-        "class_type": "LoraLoaderModelOnly",
-        "_meta": {
-          "title": "LoraLoaderModelOnly"
         }
       },
       "73": {
@@ -155,25 +144,25 @@
         },
         "class_type": "Int Literal (Image Saver)",
         "_meta": {
-          "title": "height\n"
+          "title": "Height"
         }
       },
       "74": {
         "inputs": {
-          "string": "an 8k photograph of a woman who is wearing a business suit is posing for a professional linkedin profile picture while looking directly at the camera, light smile"
+          "string": "A friendly individual posing for a casual profile picture, looking directly at the camera, girl, Curly red hair, hazel eyes, has a vibrant personality, often dressed in colorful athletic wear."
         },
         "class_type": "String Literal (Image Saver)",
         "_meta": {
-          "title": "String Literal (Image Saver)"
+          "title": "Prompt Description"
         }
       },
       "76": {
         "inputs": {
-          "int": 1216
+          "int": 832
         },
         "class_type": "Int Literal (Image Saver)",
         "_meta": {
-          "title": "width\n"
+          "title": "Width"
         }
       },
       "77": {

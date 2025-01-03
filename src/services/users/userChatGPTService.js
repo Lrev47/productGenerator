@@ -108,6 +108,7 @@ function fixMalformedObjects(array) {
     "moneyNum",
     "favoriteProduct",
     "prompt",
+    "gender",
   ];
 
   const validItems = [];
@@ -177,6 +178,14 @@ function fixMalformedObjects(array) {
       item.prompt = "";
     }
 
+    if (item.gender !== "MALE" && item.gender !== "FEMALE") {
+      console.warn(
+        'Discarding user with invalid gender (must be "MALE" or "FEMALE"):',
+        item.gender
+      );
+      continue;
+    }
+
     validItems.push(item);
   }
 
@@ -198,17 +207,18 @@ async function getUserChunk(count) {
 You are an AI that ONLY outputs valid JSON arrays of user data.
 No extra text, no code blocks, no partial objects, no trailing commas.
 Each user must have exactly these keys:
-  "firstName", "lastName", "username", "email", "password", "role", "moneyNum", "favoriteProduct", "prompt"
+  "firstName", "lastName", "username", "email", "password", "role", "moneyNum", "favoriteProduct", "prompt", "gender"
 
 Rules:
 1. Every user must have valid strings. For lastName and email, do not leave them empty or create blank keys like "".
 2. If you cannot generate a specific field, fill it with a placeholder string like "Unknown".
 3. Do not produce partial objects. If an item is incomplete, skip it or correct it, but the final output must remain a valid JSON array.
 4. "prompt" must be at least 15 words describing the user’s personal facial details and style.
-5. Double-check your JSON syntax thoroughly. Use proper quotes and colons.
-6. End with a valid JSON array. Do not produce any trailing commas or extra text.
-7. **All usernames must be UNIQUE**. If you generate any duplicates, replace or alter them so each user has a unique username.
-8. **All emails must be UNIQUE**. If you generate any duplicates, modify them with random suffixes.
+5. "gender" must be either "MALE" or "FEMALE".
+6. Double-check your JSON syntax thoroughly. Use proper quotes and colons.
+7. End with a valid JSON array. Do not produce any trailing commas or extra text.
+8. **All usernames must be UNIQUE**. If you generate any duplicates, replace or alter them so each user has a unique username.
+9. **All emails must be UNIQUE**. If you generate any duplicates, modify them with random suffixes.
 `;
 
   const userPrompt = `
@@ -223,7 +233,8 @@ Generate ${count} unique fictional users in a valid JSON array. Example of 1 ite
   "role": "USER",
   "moneyNum": 250.75,
   "favoriteProduct": "Fancy Laptop Case",
-  "prompt": "Brown hair, green eyes, wears glasses, and has a friendly smile and modern style with floral tones."
+  "prompt": "Brown hair, green eyes, wears glasses, and has a friendly smile and modern style with floral tones.",
+  "gender": "FEMALE"
 }
 
 No code blocks or markdown. Return only a valid JSON array with ${count} such objects.
