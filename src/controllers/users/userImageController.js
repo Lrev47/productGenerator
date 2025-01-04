@@ -64,7 +64,7 @@ ${FIXED_USER_PROMPT}
       logs.push("Warning: Could not find node 74 to inject prompt!");
     }
 
-    const callbackUrl = `${serverPublicUrl}/users/images/runpod-callback`;
+    const callbackUrl = `${serverPublicUrl}/api/users/images/runpod-callback`;
     workflow.input.callbackUrl = callbackUrl;
     workflow.input.userId = userId;
     logs.push(`Set callbackUrl=${callbackUrl} and userId=${userId}`);
@@ -128,7 +128,7 @@ ${FIXED_USER_PROMPT}
         logs.push(`Warning: No node 74 for userId=${user.id}?`);
       }
 
-      const callbackUrl = `${serverPublicUrl}/users/images/runpod-callback`;
+      const callbackUrl = `${serverPublicUrl}/api/users/images/runpod-callback`;
       workflow.input.callbackUrl = callbackUrl;
       workflow.input.userId = user.id;
 
