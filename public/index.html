@@ -83,6 +83,22 @@
         color: #fff;
         border: 1px solid #333;
       }
+
+      /* Logs area styling */
+      #logsArea {
+        margin-top: 20px;
+        background: #111;
+        width: 100%;
+        height: 200px;
+        color: #0f0; /* green text for logs */
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 10px;
+        resize: vertical;
+        font-family: monospace;
+        white-space: pre-wrap;
+        overflow-y: auto;
+      }
     </style>
   </head>
   <body>
@@ -95,8 +111,7 @@
         <h2>Generate Products (GPT-40-mini)</h2>
         <p>
           Generates products in chunks and saves them to the DB even if an error
-          occurs later. If no number is specified, defaults to 100 (or whatever
-          your backend default is).
+          occurs later. If no number is specified, defaults to 100.
         </p>
         <form id="generateProductsForm">
           <label for="numberOfProductsInput"
@@ -145,7 +160,7 @@
         <h2>Generate Users (GPT-4o-mini)</h2>
         <p>
           Generates users in chunks (with partial saving on error). If you don't
-          specify a number, defaults to 50 (or whatever your backend sets).
+          specify a number, defaults to 50.
         </p>
         <form id="generateUsersForm">
           <label for="numberOfUsersInput">Number of Users (optional):</label>
@@ -225,7 +240,7 @@
       <div class="right-column">
         <h2>Generate Missing Order Items</h2>
         <p>
-          For each order with no items, generate a random number of items
+          For each order with no items, generate a random number of items,
           referencing random products, then update the order’s total.
         </p>
         <button id="generateMissingOrderItemsBtn">
@@ -251,16 +266,20 @@
         <p>
           Runs the entire pipeline in sequence:
           <code
-            >products → product images → users → user images → addresses →
-            reviews → orders → order items → payments</code
-          >.
+            >products → images → users → addresses → reviews → orders → items →
+            payments</code
+          >
         </p>
         <button id="runAllSetupBtn">Run All Setup</button>
       </div>
     </div>
 
-    <!-- Response Area: server responses get displayed here -->
+    <!-- Response Area -->
     <div id="responseArea">Awaiting action...</div>
+
+    <!-- New Logs Section -->
+    <h2>Client-Side Logs</h2>
+    <pre id="logsArea"></pre>
 
     <script>
       // DOM references
@@ -304,62 +323,80 @@
       // ============ SETUP ALL ============
       const runAllSetupBtn = document.getElementById("runAllSetupBtn");
 
-      // Response output
+      // Output areas
       const responseArea = document.getElementById("responseArea");
+      const logsArea = document.getElementById("logsArea");
 
-      // Helper function to display JSON data
+      // Helper function to display JSON data in the response area
       function displayResponse(data) {
         responseArea.textContent = JSON.stringify(data, null, 2);
       }
 
+      // Helper function to append logs to logsArea
+      function appendLog(message) {
+        // Add timestamp
+        const now = new Date().toISOString().split("T").join(" ").split(".")[0];
+        logsArea.textContent += `[${now}] ${message}\n`;
+        // Auto-scroll to bottom
+        logsArea.scrollTop = logsArea.scrollHeight;
+      }
+
+      // Example usage:
+      // appendLog("This is a test log...");
+
       // ================== PRODUCTS ==================
 
-      // 1) Generate Products form
+      // 1) Generate Products
       generateProductsForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const numberOfProductsInput = document.getElementById(
           "numberOfProductsInput"
         );
         const numberOfProducts = numberOfProductsInput.value || 0;
+        appendLog(
+          `(Products) About to generate ${numberOfProducts || 100} products...`
+        );
 
-        responseArea.textContent =
-          "Generating " + (numberOfProducts || 100) + " products...";
+        responseArea.textContent = `Generating ${
+          numberOfProducts || 100
+        } products...`;
 
         try {
-          // Matches route: POST /api/products/generate-products
           const response = await fetch("/api/products/generate-products", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               numberOfProducts: Number(numberOfProducts),
             }),
           });
-
           const data = await response.json();
+
+          appendLog(`(Products) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(Products) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
 
       // 2) Generate Missing Product Images
       generateMissingBtn.addEventListener("click", async () => {
+        appendLog(`(Products) Generating missing product images...`);
         responseArea.textContent = "Generating missing product images...";
 
         try {
-          // Matches route: POST /api/products/images/generate-missing
           const response = await fetch(
             "/api/products/images/generate-missing",
             {
               method: "POST",
             }
           );
-
           const data = await response.json();
+
+          appendLog(`(Products) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(Products) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
@@ -368,70 +405,71 @@
       singleImageForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const productId = document.getElementById("singleImageId").value;
-
-        responseArea.textContent =
-          "Generating image for product ID: " + productId + "...";
+        appendLog(
+          `(Products) Generating image for product ID: ${productId}...`
+        );
+        responseArea.textContent = `Generating image for product ID: ${productId}...`;
 
         try {
-          // Matches route: POST /api/products/images/generate-by-id/:id
           const response = await fetch(
             `/api/products/images/generate-by-id/${productId}`,
             {
               method: "POST",
             }
           );
-
           const data = await response.json();
+
+          appendLog(`(Products) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(Products) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
 
       // ================== USERS ==================
 
-      // 4) Generate Users form
+      // 4) Generate Users
       generateUsersForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const numberOfUsersInput =
           document.getElementById("numberOfUsersInput");
         const numberOfUsers = numberOfUsersInput.value || 0;
+        appendLog(`(Users) About to generate ${numberOfUsers || 50} users...`);
 
-        responseArea.textContent =
-          "Generating " + (numberOfUsers || 50) + " users...";
+        responseArea.textContent = `Generating ${numberOfUsers || 50} users...`;
 
         try {
-          // Matches route: POST /api/users/generate-users
           const response = await fetch("/api/users/generate-users", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              numberOfUsers: Number(numberOfUsers),
-            }),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ numberOfUsers: Number(numberOfUsers) }),
           });
-
           const data = await response.json();
+
+          appendLog(`(Users) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(Users) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
 
       // 5) Generate Missing User Images
       generateMissingUserImagesBtn.addEventListener("click", async () => {
+        appendLog(`(Users) Generating missing user images...`);
         responseArea.textContent = "Generating missing user images...";
 
         try {
-          // Matches route: POST /api/users/images/generate-missing
           const response = await fetch("/api/users/images/generate-missing", {
             method: "POST",
           });
-
           const data = await response.json();
+
+          appendLog(`(Users) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(Users) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
@@ -440,124 +478,134 @@
       singleUserImageForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const userId = document.getElementById("singleUserId").value;
-
-        responseArea.textContent =
-          "Generating image for user ID: " + userId + "...";
+        appendLog(`(Users) Generating image for user ID: ${userId}...`);
+        responseArea.textContent = `Generating image for user ID: ${userId}...`;
 
         try {
-          // Matches route: POST /api/users/images/generate-by-id/:id
           const response = await fetch(
             `/api/users/images/generate-by-id/${userId}`,
             {
               method: "POST",
             }
           );
-
           const data = await response.json();
+
+          appendLog(`(Users) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(Users) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
 
       // ================== ADDRESSES ==================
-
       generateMissingAddressesBtn.addEventListener("click", async () => {
+        appendLog(`(Addresses) Generating missing addresses...`);
         responseArea.textContent = "Generating missing addresses...";
 
         try {
-          // Matches route: POST /api/addresses/generate-missing
           const response = await fetch("/api/addresses/generate-missing", {
             method: "POST",
           });
           const data = await response.json();
+
+          appendLog(`(Addresses) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(Addresses) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
 
       // ================== REVIEWS ==================
-
       generateReviewsBtn.addEventListener("click", async () => {
+        appendLog(`(Reviews) Generating reviews...`);
         responseArea.textContent = "Generating reviews...";
 
         try {
-          // Matches route: POST /api/reviews/generate-reviews
           const response = await fetch("/api/reviews/generate-reviews", {
             method: "POST",
           });
           const data = await response.json();
+
+          appendLog(`(Reviews) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(Reviews) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
 
       // ================== ORDERS ==================
-
       generateOrdersBtn.addEventListener("click", async () => {
+        appendLog(`(Orders) Generating orders...`);
         responseArea.textContent = "Generating orders...";
 
         try {
-          // Matches route: POST /api/orders/generate
           const response = await fetch("/api/orders/generate", {
             method: "POST",
           });
           const data = await response.json();
+
+          appendLog(`(Orders) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(Orders) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
 
       // ================== ORDER ITEMS ==================
-
       generateMissingOrderItemsBtn.addEventListener("click", async () => {
+        appendLog(`(OrderItems) Generating missing order items...`);
         responseArea.textContent = "Generating missing order items...";
 
         try {
-          // Matches route: POST /api/order-items/generate-missing
           const response = await fetch("/api/order-items/generate-missing", {
             method: "POST",
           });
           const data = await response.json();
+
+          appendLog(`(OrderItems) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(OrderItems) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
 
       // ================== PAYMENTS ==================
-
       generateMissingPaymentsBtn.addEventListener("click", async () => {
+        appendLog(`(Payments) Generating missing payments...`);
         responseArea.textContent = "Generating missing payments...";
 
         try {
-          // Matches route: POST /api/payments/generate-missing
           const response = await fetch("/api/payments/generate-missing", {
             method: "POST",
           });
           const data = await response.json();
+
+          appendLog(`(Payments) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(Payments) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
 
       // ================== SETUP ALL ==================
-
       runAllSetupBtn.addEventListener("click", async () => {
+        appendLog(`(SetupAll) Running the full setup pipeline...`);
         responseArea.textContent = "Running full setup pipeline...";
 
         try {
-          // Matches route: POST /api/setup/all
-          const response = await fetch("/api/setup/all", {
-            method: "POST",
-          });
+          const response = await fetch("/api/setup/all", { method: "POST" });
           const data = await response.json();
+
+          appendLog(`(SetupAll) Response: ${JSON.stringify(data)}`);
           displayResponse(data);
         } catch (err) {
+          appendLog(`(SetupAll) Error: ${err.toString()}`);
           displayResponse({ error: err.toString() });
         }
       });
