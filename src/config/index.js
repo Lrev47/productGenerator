@@ -18,6 +18,12 @@ const port = process.env.PORT || 3000;
 const serverPublicUrl =
   process.env.SERVER_PUBLIC_URL || "http://localhost:3000";
 
+console.log(
+  "[DEBUG] process.env.SERVER_PUBLIC_URL =",
+  process.env.SERVER_PUBLIC_URL
+);
+console.log("[DEBUG] serverPublicUrl =", serverPublicUrl);
+
 module.exports = {
   openAiApiKey,
   comfyUIBaseUrl,
