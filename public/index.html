@@ -187,17 +187,91 @@
       </div>
     </div>
 
+    <!-- THIRD ROW: Addresses, Reviews -->
+    <div class="flex-container">
+      <!-- LEFT COLUMN: Addresses -->
+      <div class="left-column">
+        <h2>Generate Missing Addresses</h2>
+        <p>For each user who has no addresses, request 2 from ChatGPT.</p>
+        <button id="generateMissingAddressesBtn">
+          Generate Missing Addresses
+        </button>
+      </div>
+
+      <!-- RIGHT COLUMN: Reviews -->
+      <div class="right-column">
+        <h2>Generate Reviews</h2>
+        <p>
+          For each user, pick 5 random products. Calls ChatGPT in chunks and
+          creates DB records.
+        </p>
+        <button id="generateReviewsBtn">Generate Reviews</button>
+      </div>
+    </div>
+
+    <!-- FOURTH ROW: Orders, Order Items, Payments -->
+    <div class="flex-container">
+      <!-- LEFT COLUMN: Orders -->
+      <div class="left-column">
+        <h2>Generate Orders</h2>
+        <p>
+          Creates 5 orders per user (each with a different status), total=0,
+          random shipping & billing addresses.
+        </p>
+        <button id="generateOrdersBtn">Generate Orders</button>
+      </div>
+
+      <!-- RIGHT COLUMN: Order Items -->
+      <div class="right-column">
+        <h2>Generate Missing Order Items</h2>
+        <p>
+          For each order with no items, generate a random number of items
+          referencing random products, then update the order’s total.
+        </p>
+        <button id="generateMissingOrderItemsBtn">
+          Generate Missing Order Items
+        </button>
+      </div>
+    </div>
+
+    <!-- FIFTH ROW: Payments, Setup -->
+    <div class="flex-container">
+      <!-- LEFT COLUMN: Payments -->
+      <div class="left-column">
+        <h2>Generate Missing Payments</h2>
+        <p>Creates Payment records for each Order that has no Payment.</p>
+        <button id="generateMissingPaymentsBtn">
+          Generate Missing Payments
+        </button>
+      </div>
+
+      <!-- RIGHT COLUMN: Setup All -->
+      <div class="right-column">
+        <h2>Run All Setup</h2>
+        <p>
+          Runs the entire pipeline in sequence:
+          <code
+            >products → product images → users → user images → addresses →
+            reviews → orders → order items → payments</code
+          >.
+        </p>
+        <button id="runAllSetupBtn">Run All Setup</button>
+      </div>
+    </div>
+
     <!-- Response Area: server responses get displayed here -->
     <div id="responseArea">Awaiting action...</div>
 
     <script>
       // DOM references
+      // ============ PRODUCTS ============
       const generateProductsForm = document.getElementById(
         "generateProductsForm"
       );
       const generateMissingBtn = document.getElementById("generateMissingBtn");
       const singleImageForm = document.getElementById("singleImageForm");
 
+      // ============ USERS ============
       const generateUsersForm = document.getElementById("generateUsersForm");
       const generateMissingUserImagesBtn = document.getElementById(
         "generateMissingUserImagesBtn"
@@ -206,6 +280,31 @@
         "singleUserImageForm"
       );
 
+      // ============ ADDRESSES ============
+      const generateMissingAddressesBtn = document.getElementById(
+        "generateMissingAddressesBtn"
+      );
+
+      // ============ REVIEWS ============
+      const generateReviewsBtn = document.getElementById("generateReviewsBtn");
+
+      // ============ ORDERS ============
+      const generateOrdersBtn = document.getElementById("generateOrdersBtn");
+
+      // ============ ORDER ITEMS ============
+      const generateMissingOrderItemsBtn = document.getElementById(
+        "generateMissingOrderItemsBtn"
+      );
+
+      // ============ PAYMENTS ============
+      const generateMissingPaymentsBtn = document.getElementById(
+        "generateMissingPaymentsBtn"
+      );
+
+      // ============ SETUP ALL ============
+      const runAllSetupBtn = document.getElementById("runAllSetupBtn");
+
+      // Response output
       const responseArea = document.getElementById("responseArea");
 
       // Helper function to display JSON data
@@ -354,6 +453,108 @@
             }
           );
 
+          const data = await response.json();
+          displayResponse(data);
+        } catch (err) {
+          displayResponse({ error: err.toString() });
+        }
+      });
+
+      // ================== ADDRESSES ==================
+
+      generateMissingAddressesBtn.addEventListener("click", async () => {
+        responseArea.textContent = "Generating missing addresses...";
+
+        try {
+          // Matches route: POST /api/addresses/generate-missing
+          const response = await fetch("/api/addresses/generate-missing", {
+            method: "POST",
+          });
+          const data = await response.json();
+          displayResponse(data);
+        } catch (err) {
+          displayResponse({ error: err.toString() });
+        }
+      });
+
+      // ================== REVIEWS ==================
+
+      generateReviewsBtn.addEventListener("click", async () => {
+        responseArea.textContent = "Generating reviews...";
+
+        try {
+          // Matches route: POST /api/reviews/generate-reviews
+          const response = await fetch("/api/reviews/generate-reviews", {
+            method: "POST",
+          });
+          const data = await response.json();
+          displayResponse(data);
+        } catch (err) {
+          displayResponse({ error: err.toString() });
+        }
+      });
+
+      // ================== ORDERS ==================
+
+      generateOrdersBtn.addEventListener("click", async () => {
+        responseArea.textContent = "Generating orders...";
+
+        try {
+          // Matches route: POST /api/orders/generate
+          const response = await fetch("/api/orders/generate", {
+            method: "POST",
+          });
+          const data = await response.json();
+          displayResponse(data);
+        } catch (err) {
+          displayResponse({ error: err.toString() });
+        }
+      });
+
+      // ================== ORDER ITEMS ==================
+
+      generateMissingOrderItemsBtn.addEventListener("click", async () => {
+        responseArea.textContent = "Generating missing order items...";
+
+        try {
+          // Matches route: POST /api/order-items/generate-missing
+          const response = await fetch("/api/order-items/generate-missing", {
+            method: "POST",
+          });
+          const data = await response.json();
+          displayResponse(data);
+        } catch (err) {
+          displayResponse({ error: err.toString() });
+        }
+      });
+
+      // ================== PAYMENTS ==================
+
+      generateMissingPaymentsBtn.addEventListener("click", async () => {
+        responseArea.textContent = "Generating missing payments...";
+
+        try {
+          // Matches route: POST /api/payments/generate-missing
+          const response = await fetch("/api/payments/generate-missing", {
+            method: "POST",
+          });
+          const data = await response.json();
+          displayResponse(data);
+        } catch (err) {
+          displayResponse({ error: err.toString() });
+        }
+      });
+
+      // ================== SETUP ALL ==================
+
+      runAllSetupBtn.addEventListener("click", async () => {
+        responseArea.textContent = "Running full setup pipeline...";
+
+        try {
+          // Matches route: POST /api/setup/all
+          const response = await fetch("/api/setup/all", {
+            method: "POST",
+          });
           const data = await response.json();
           displayResponse(data);
         } catch (err) {
