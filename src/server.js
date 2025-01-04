@@ -8,6 +8,12 @@ const { port } = require("./config");
 // Create Express instance
 const app = express();
 
+// Quick debug: Log every incoming request
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Incoming request: ${req.method} ${req.url}`);
+  next();
+});
+
 // JSON parsing middleware
 app.use(express.json());
 
