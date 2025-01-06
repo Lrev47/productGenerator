@@ -185,6 +185,7 @@
           "title": "Unet Loader (GGUF)"
         }
       }
-    }
+    },
+    "callbackUrl": ""
   }
 }
