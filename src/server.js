@@ -15,7 +15,7 @@ app.use((req, res, next) => {
 });
 
 // JSON parsing middleware
-app.use(express.json());
+app.use(express.json({ limit: "100mb" }));
 
 // Serve static files
 app.use(express.static(path.join(__dirname, "..", "public")));
