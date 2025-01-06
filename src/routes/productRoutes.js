@@ -11,7 +11,7 @@ const {
   generateProductImageById,
   generateMissingProductImages,
   handleRunpodCallback,
-} = require("../../controllers/products/productImageController");
+} = require("../controllers/products/productImageController");
 
 // 1) Generate products in bulk
 //    POST /products/generate-products
