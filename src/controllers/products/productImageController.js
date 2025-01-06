@@ -1,5 +1,5 @@
 const prisma = require("../../../prisma/client");
-const productImageWorkflow = require("../../assets/productImageWorkflow.json");
+const productImageWorkflow = require("../../assets/ProductImageWorkflow.json");
 const {
   uploadProductImageToS3,
 } = require("../../services/products/productS3Service");
